@@ -1,9 +1,10 @@
-// ESP-IDF RS485 Master Example
+// ESP-IDF RS485 Master - Ping Example
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include <string.h>
 
 #define RS485_TXD_PIN (17)
 #define RS485_RXD_PIN (16)
@@ -11,6 +12,8 @@
 #define RS485_UART_PORT_NUM      UART_NUM_1
 #define RS485_BAUD_RATE          9600
 #define BUF_SIZE                 128
+
+static const char *TAG = "RS485_MASTER";
 
 void app_main(void)
 {
@@ -27,10 +30,22 @@ void app_main(void)
     uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
     uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX);
 
-    uint8_t data[] = "Hello from RS485 Master!";
+    uint8_t rx_buf[BUF_SIZE];
+    const char *ping_msg = "PING";
+
     while (1) {
-        uart_write_bytes(uart_num, (const char*)data, sizeof(data));
-        ESP_LOGI("RS485_MASTER", "Sent: %s", data);
+        // Kirim ping
+        uart_write_bytes(uart_num, ping_msg, strlen(ping_msg));
+        ESP_LOGI(TAG, "Sent: %s", ping_msg);
+
+        // Tunggu balasan
+        int len = uart_read_bytes(uart_num, rx_buf, BUF_SIZE-1, 1000 / portTICK_PERIOD_MS);
+        if (len > 0) {
+            rx_buf[len] = '\0';
+            ESP_LOGI(TAG, "Received reply: %s", rx_buf);
+        } else {
+            ESP_LOGW(TAG, "No reply from slave");
+        }
         vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
 }
