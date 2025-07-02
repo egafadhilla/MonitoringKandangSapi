@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "rs485_slave",
-    "project_version":    "0472327",
+    "project_version":    "44600bc-dirty",
     "project_path":       "D:/GitHubDoc/MonitoringKandangSapi/RS485_ESPIDF/slave",
     "idf_path":           "C:/Users/USER/esp/v5.4/esp-idf",
     "build_dir":          "D:/GitHubDoc/MonitoringKandangSapi/RS485_ESPIDF/slave/build",
