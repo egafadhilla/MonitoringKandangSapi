@@ -1,6 +1,6 @@
 /* Automatically generated file; DO NOT EDIT */
 /* Espressif IoT Development Framework Linker Script */
-/* Generated from: D:\GitHubDoc\MonitoringKandangSapi\RS485_ESPIDF\slave\build\esp-idf\esp_system\ld\sections.ld.in */
+/* Generated from: D:\Riset\MonitoringKandangSapi\RS485_ESPIDF\slave\build\esp-idf\esp_system\ld\sections.ld.in */
 
 /*
 
