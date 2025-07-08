@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "rs485_master",
-    "project_version":    "10018d2-dirty",
+    "project_version":    "bf80929-dirty",
     "project_path":       "D:/Riset/MonitoringKandangSapi/RS485_ESPIDF/master",
     "idf_path":           "C:/Users/acer/esp/v5.4/esp-idf",
     "build_dir":          "D:/Riset/MonitoringKandangSapi/RS485_ESPIDF/master/build",

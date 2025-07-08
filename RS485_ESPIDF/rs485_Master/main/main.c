@@ -1,35 +1,97 @@
-// ESP-IDF RS485 Master Example
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/uart.h"
-#include "esp_log.h"
+#include <driver/uart.h>
+#include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <string.h>
+#include <esp_log.h>
 
-#define RS485_TXD_PIN (17)
-#define RS485_RXD_PIN (16)
-#define RS485_RTS_PIN (18)
-#define RS485_UART_PORT_NUM      UART_NUM_1
-#define RS485_BAUD_RATE          9600
-#define BUF_SIZE                 128
+static const char* TAG = "RS485_TX";
+uint8_t tx_buffer[50];
+uint8_t rx_buffer[50];
+bool gpio_state= 1;
+QueueHandle_t uart_event_queue;
 
-void app_main(void)
+   void RS485_SetTX(void);
+    void RS485_SetRX(void);
+
+void RS485_Send(uart_port_t uart_port,uint8_t* buf,uint16_t size)
 {
-    const int uart_num = RS485_UART_PORT_NUM;
+    RS485_SetTX();
+    uart_write_bytes(uart_port,buf,size);
+    uart_wait_tx_done(uart_port,portMAX_DELAY);
+    RS485_SetRX();
+}
+
+void uart_init(void)
+{
     uart_config_t uart_config = {
+        .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
         .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-    };
-    uart_param_config(uart_num, &uart_config);
-    uart_set_pin(uart_num, RS485_TXD_PIN, RS485_RXD_PIN, RS485_RTS_PIN, UART_PIN_NO_CHANGE);
-    uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
-    uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX);
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT
+        };
+    uart_param_config(UART_NUM_2, &uart_config);
+    uart_set_pin(UART_NUM_2,5,4,UART_PIN_NO_CHANGE,UART_PIN_NO_CHANGE);
+    uart_driver_install(UART_NUM_2, 1024 * 2, 1024 * 2, 30, &uart_event_queue, 0);
+    
+}
 
-    uint8_t data[] = "Hello from RS485 Master!";
-    while (1) {
-        uart_write_bytes(uart_num, (const char*)data, sizeof(data));
-        ESP_LOGI("RS485_MASTER", "Sent: %s", data);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+void RS485_Init(void)
+{
+    uart_init();
+    gpio_reset_pin(GPIO_NUM_4);
+    gpio_set_direction(GPIO_NUM_4,GPIO_MODE_OUTPUT);
+
+}
+void RS485_SetTX()
+{
+    gpio_set_level(GPIO_NUM_4,1);
+}
+void RS485_SetRX()
+{
+    gpio_set_level(GPIO_NUM_4,0);
+}
+void uart_event_task(void *pvParameter)
+{
+
+    uart_event_t event;
+    RS485_SetRX();
+    while (1)
+    {
+        if (xQueueReceive(uart_event_queue, (void*)&event,portMAX_DELAY) == pdTRUE)
+        {
+            switch (event.type)
+            {
+                
+                case UART_DATA:
+                    uart_read_bytes(UART_NUM_2, rx_buffer, event.size, portMAX_DELAY);
+                    if(strncmp((char*)rx_buffer,"{helloo}",8) == 0)
+                    {
+
+                    }
+                    ESP_LOGI(TAG,"Received : %.*s",event.size,rx_buffer);
+                    memset(rx_buffer,0,sizeof(rx_buffer));
+                    break;
+                case UART_FRAME_ERR:
+                    ESP_LOGE(TAG,"UART_FRAME_ERR");
+                    break;
+                    default:break;
+            }     
+        }
     }
+
+}
+
+void app_main(void)
+{
+    RS485_Init();
+    xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
+    while(1)
+    {
+        RS485_Send(UART_NUM_2,(uint8_t*)"{helloo}",9);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  
 }
