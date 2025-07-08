@@ -5,7 +5,7 @@
 #include <string.h>
 #include <esp_log.h>
 
-static const char* TAG = "RS485_TX";
+static const char* TAG_RS485 = "RS485";
 uint8_t tx_buffer[50];
 uint8_t rx_buffer[50];
 bool gpio_state= 1;
@@ -69,13 +69,13 @@ void uart_event_task(void *pvParameter)
                     uart_read_bytes(UART_NUM_2, rx_buffer, event.size, portMAX_DELAY);
                     if(strncmp((char*)rx_buffer,"{helloo}",8) == 0)
                     {
-                        ESP_LOGI(TAG,"MOOO");
+                        ESP_LOGI(TAG_RS485,"MOOO");
                     }
-                    ESP_LOGI(TAG,"Received : %.*s",event.size,rx_buffer);
+                    ESP_LOGI(TAG_RS485,"Received : %.*s",event.size,rx_buffer);
                     memset(rx_buffer,0,sizeof(rx_buffer));
                     break;
                 case UART_FRAME_ERR:
-                    ESP_LOGE(TAG,"UART_FRAME_ERR");
+                    ESP_LOGE(TAG_RS485,"UART_FRAME_ERR");
                     break;
                     default:break;
             }     
@@ -90,7 +90,7 @@ void app_main(void)
     xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
     while(1)
     {
-        RS485_Send(UART_NUM_2,(uint8_t*)"{helloo}",8);
+        //RS485_Send(UART_NUM_2,(uint8_t*)"{helosl}",8);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
   
