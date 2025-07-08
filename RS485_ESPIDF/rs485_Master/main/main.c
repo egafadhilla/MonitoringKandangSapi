@@ -33,7 +33,7 @@ void uart_init(void)
         .source_clk = UART_SCLK_DEFAULT
         };
     uart_param_config(UART_NUM_2, &uart_config);
-    uart_set_pin(UART_NUM_2,5,4,UART_PIN_NO_CHANGE,UART_PIN_NO_CHANGE);
+    uart_set_pin(UART_NUM_2,17,16,UART_PIN_NO_CHANGE,UART_PIN_NO_CHANGE);
     uart_driver_install(UART_NUM_2, 1024 * 2, 1024 * 2, 30, &uart_event_queue, 0);
     
 }
@@ -69,7 +69,7 @@ void uart_event_task(void *pvParameter)
                     uart_read_bytes(UART_NUM_2, rx_buffer, event.size, portMAX_DELAY);
                     if(strncmp((char*)rx_buffer,"{helloo}",8) == 0)
                     {
-
+                        ESP_LOGI(TAG,"MOOO");
                     }
                     ESP_LOGI(TAG,"Received : %.*s",event.size,rx_buffer);
                     memset(rx_buffer,0,sizeof(rx_buffer));
@@ -90,7 +90,7 @@ void app_main(void)
     xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
     while(1)
     {
-        RS485_Send(UART_NUM_2,(uint8_t*)"{helloo}",9);
+        RS485_Send(UART_NUM_2,(uint8_t*)"{helloo}",8);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
   
