@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/GitHubDoc/MonitoringKandangSapi/RS485_ESPIDF/master"
+    "cmake.sourceDirectory": "D:/GitHubDoc/MonitoringKandangSapi/RS485_ESPIDF/master",
+    "idf.portWin": "COM8"
 }

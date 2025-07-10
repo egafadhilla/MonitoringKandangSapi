@@ -90,7 +90,7 @@ void app_main(void)
     xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
     while(1)
     {
-        //RS485_Send(UART_NUM_2,(uint8_t*)"{helosl}",8);
+        RS485_Send(UART_NUM_2,(uint8_t*)"{helosl}",8);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
   
