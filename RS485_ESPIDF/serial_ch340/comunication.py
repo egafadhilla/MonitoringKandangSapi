@@ -7,7 +7,7 @@ import time
 try:
     # Open serial port
     ser = serial.Serial(
-        port="COM5",
+        port="/dev/ttyUSB0",
         baudrate=115200,
         bytesize=serial.EIGHTBITS,
         parity=serial.PARITY_NONE,
@@ -15,7 +15,7 @@ try:
         timeout=1.0
     )
 except serial.SerialException as e:
-    print(f"Error: Tidak dapat membuka port COM5. {e}")
+    print(f"Error: Tidak dapat membuka PORT. {e}")
     sys.exit()
  
 # Event untuk sinkronisasi antara thread utama (pengirim) dan thread pembaca
@@ -65,14 +65,28 @@ try:
 
         if command == "exit":
             break
-        elif command == "ping":
-            print("Mengirim PING...")
+        elif command == "ping.all":
             ser.write(b'{PING_GAS}')
-        elif command == "req":
-            print("Meminta data sensor...")
+            time.sleep(0.01)#memberi jeda untuk menerima balasan kemudian lanjut ping yang lainnya
+            ser.write(b'{PING_ENV}')
+        elif command == "req.all":
             ser.write(b'{REQ_GAS}')
+            time.sleep(0.01)#memberi jeda untuk menerima balasan kemudian lanjut ping yang lainnya
+            ser.write(b'{REQ_ENV}')
+        elif command == "ping.gas":
+            print("Mengirim PING ke slave gas...")
+            ser.write(b'{PING_GAS}')
+        elif command == "ping.env":
+            print("Mengirim PING ke slave env...")
+            ser.write(b'{PING_ENV}')
+        elif command == "req.gas":
+            print("Meminta data dari slave gas...")
+            ser.write(b'{REQ_GAS}')
+        elif command == "req.env":
+            print("Meminta data dari slave env...")
+            ser.write(b'{REQ_ENV}')
         else:
-            print("Perintah tidak dikenal. Gunakan 'ping', 'req', atau 'exit'.")
+            print("Perintah tidak dikenal. Gunakan 'ping gas','ping env', 'req gas', 'req env', atau 'exit'.")
             continue # Langsung ke iterasi berikutnya jika perintah tidak valid
         
         # Tunggu respons dari slave selama maksimal 2 detik
