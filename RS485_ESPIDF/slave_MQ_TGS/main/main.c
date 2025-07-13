@@ -116,8 +116,8 @@ void uart_event_task(void *pvParameter)
                         // Ini memberi waktu bagi master untuk beralih dari mode TX ke RX.
                         vTaskDelay(pdMS_TO_TICKS(10));
                         // [FIX 1] Kirim respons dengan format yang benar (diakhiri '}')
-                        RS485_Send(UART_NUM_2,(uint8_t*)"{GAS_CONNECT}",13);
                         ESP_LOGI(TAG_RS485,"PING_RECEIVED");
+                        RS485_Send(UART_NUM_2,(uint8_t*)"{GAS_CONNECT}",13);
                     }
                     // [IMPROVEMENT] Gunakan 'else if' karena sebuah perintah tidak mungkin PING dan REQ sekaligus.
                     else if(strncmp((char*)rx_buffer,"{REQ_GAS}",9) == 0){
@@ -187,7 +187,9 @@ void sensor_read_task(void *pvParameter)
         } else {
             ESP_LOGE(TAG_SENSOR, "Failed to read MQ136. Error: %s", esp_err_to_name(mq_status));
         }
-
+        char responsebuffer[100];
+        snprintf(responsebuffer, sizeof(responsebuffer), "{\"tgs2602\":%d,\"mq136\":%d}", tgs2602, mq136);
+        RS485_Send(UART_NUM_2, (uint8_t*)responsebuffer, strlen(responsebuffer));
         vTaskDelay(pdMS_TO_TICKS(READ_INTERVAL_MS));
     }
 }   
@@ -200,10 +202,14 @@ void app_main(void)
     sensor_data_mutex = xSemaphoreCreateMutex();
 
     xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
-    xTaskCreate(sensor_read_task, "sensor_read_task", 2048 * 2, NULL, 5, NULL);
-
-    // <-- [BEST PRACTICE] Setelah task lain dibuat, task app_main bisa dihapus
-    // atau dibuat idle untuk menghemat resource.
     ESP_LOGI(TAG_RS485, "Setup complete. Main task is now idle.");
+    xTaskCreate(sensor_read_task, "sensor_read_task", 2048 * 2, NULL, 5, NULL);
+    
+    // while(1){
+        
+    //     vTaskDelay(pdMS_TO_TICKS(1000)); // Task ini tidak melakukan apa-apa, hanya menunggu
+    //     // Jika ingin menghapus task ini, bisa gunakan:
+    //     // vTaskDelete(NULL); // Hapus task app_main jika tidak diperlukan lagi
+    // }
     vTaskDelete(NULL); // Hapus task app_main
 }

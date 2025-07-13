@@ -350,13 +350,16 @@ Mbed TLS_BINARY_DIR:STATIC=D:/Riset/MonitoringKandangSapi/RS485_ESPIDF/build/esp
 Mbed TLS_IS_TOP_LEVEL:STATIC=OFF
 
 //Value Computed by CMake
-Mbed TLS_SOURCE_DIR:STATIC=C:/Users/acer/esp/v5.4/esp-idf/components/mbedtls/mbedtls
+Mbed TLS_SOURCE_DIR:STATIC=C:/Users/acer/esp/v5.5-rc1/esp-idf/components/mbedtls/mbedtls
 
 //No help, variable specified on the command line.
-PYTHON:UNINITIALIZED=C:\Users\acer\.espressif\python_env\idf5.4_py3.11_env\Scripts\python.exe
+PYTHON:UNINITIALIZED=C:\Users\acer\.espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe
 
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1
+
+//No help, variable specified on the command line.
+SDKCONFIG:UNINITIALIZED=d:\Riset\MonitoringKandangSapi\RS485_ESPIDF\sdkconfig
 
 //Allow unsafe builds. These builds ARE NOT SECURE.
 UNSAFE_BUILD:BOOL=OFF
@@ -374,7 +377,7 @@ esp-idf_BINARY_DIR:STATIC=D:/Riset/MonitoringKandangSapi/RS485_ESPIDF/build/esp-
 esp-idf_IS_TOP_LEVEL:STATIC=OFF
 
 //Value Computed by CMake
-esp-idf_SOURCE_DIR:STATIC=C:/Users/acer/esp/v5.4/esp-idf
+esp-idf_SOURCE_DIR:STATIC=C:/Users/acer/esp/v5.5-rc1/esp-idf
 
 //Dependencies for the target
 everest_LIB_DEPENDS:STATIC=general;__idf_cxx;general;__idf_newlib;general;__idf_freertos;general;__idf_esp_hw_support;general;__idf_heap;general;__idf_log;general;__idf_soc;general;__idf_hal;general;__idf_esp_rom;general;__idf_esp_common;general;__idf_esp_system;general;__idf_xtensa;
@@ -548,7 +551,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=116
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=118
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP
@@ -596,7 +599,7 @@ C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS:INTERNAL=1
 //Details about finding Git
 FIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[C:/Users/acer/.espressif/tools/idf-git/2.39.2/cmd/git.exe][v2.39.2.windows.1()]
 //Details about finding Python3
-FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[C:/Users/acer/.espressif/python_env/idf5.4_py3.11_env/Scripts/python.exe][cfound components: Interpreter ][v3.11.2()]
+FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[C:/Users/acer/.espressif/python_env/idf5.5_py3.11_env/Scripts/python.exe][cfound components: Interpreter ][v3.11.2()]
 //Details about finding Threads
 FIND_PACKAGE_MESSAGE_DETAILS_Threads:INTERNAL=[TRUE][v()]
 //ADVANCED property for variable: GIT_EXECUTABLE
@@ -607,10 +610,10 @@ _GNUInstallDirs_LAST_CMAKE_INSTALL_PREFIX:INTERNAL=C:/Program Files (x86)/rs485_
 _Python3_Compiler_REASON_FAILURE:INTERNAL=
 //Development reason failure
 _Python3_Development_REASON_FAILURE:INTERNAL=
-_Python3_EXECUTABLE:INTERNAL=C:/Users/acer/.espressif/python_env/idf5.4_py3.11_env/Scripts/python.exe
+_Python3_EXECUTABLE:INTERNAL=C:/Users/acer/.espressif/python_env/idf5.5_py3.11_env/Scripts/python.exe
 //Python3 Properties
-_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;11;2;32;64;;;abi3;C:\Users\acer\.espressif\tools\idf-python\3.11.2\Lib;C:\Users\acer\.espressif\python_env\idf5.4_py3.11_env\Lib;C:\Users\acer\.espressif\python_env\idf5.4_py3.11_env\Lib\site-packages;C:\Users\acer\.espressif\python_env\idf5.4_py3.11_env\Lib\site-packages
-_Python3_INTERPRETER_SIGNATURE:INTERNAL=8996e8452f62df00e73a317d6d0ea281
+_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;11;2;32;64;;;abi3;C:\Users\acer\.espressif\tools\idf-python\3.11.2\Lib;C:\Users\acer\.espressif\python_env\idf5.5_py3.11_env\Lib;C:\Users\acer\.espressif\python_env\idf5.5_py3.11_env\Lib\site-packages;C:\Users\acer\.espressif\python_env\idf5.5_py3.11_env\Lib\site-packages
+_Python3_INTERPRETER_SIGNATURE:INTERNAL=12658d12605424af8577d676326cb176
 //NumPy reason failure
 _Python3_NumPy_REASON_FAILURE:INTERNAL=
 
