@@ -83,6 +83,7 @@ def poll_task(ser, interval_ms):
 
 def main():
     """Fungsi utama program dengan logika auto-reconnect."""
+    global polling_thread
     ser = None
     read_thread = None
 
