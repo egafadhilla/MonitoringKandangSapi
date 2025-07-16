@@ -95,7 +95,7 @@ def main():
                 read_thread = threading.Thread(target=read_from_port, args=(ser, response_received))
                 read_thread.daemon = True
                 read_thread.start()
-                print("Perintah: ping.all, req.all, poll.gas.start <ms>, poll.stop, exit")
+                print("Perintah: ping.all, req.all, poll.gas.start.<ms>, poll.stop, exit")
 
             # Thread utama menunggu input dari pengguna
             command = input("> ").strip().lower()
@@ -122,10 +122,10 @@ def main():
                 ser.write(b'{REQ_GAS}')
             elif command == "req.env":
                 ser.write(b'{REQ_ENV}')
-            elif command.startswith("poll.gas.start"):
+            elif command.startswith("poll.gas.start."):
                 try:
-                    parts = command.split()
-                    interval = int(parts[2])
+                    parts = command.split('.')
+                    interval = int(parts[3])
                     # Hentikan polling lama jika ada yang berjalan
                     if polling_thread and polling_thread.is_alive():
                         stop_polling_event.set()
@@ -136,7 +136,7 @@ def main():
                     polling_thread.daemon = True
                     polling_thread.start()
                 except (ValueError, IndexError):
-                    print("Format salah. Gunakan: poll.gas.start <interval_ms>")
+                    print("Format salah. Gunakan: poll.gas.start.<interval_ms>")
             elif command == "poll.stop":
                  stop_polling_event.set()
             else:
