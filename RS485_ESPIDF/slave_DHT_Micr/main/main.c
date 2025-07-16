@@ -134,8 +134,8 @@ void uart_event_task(void *pvParameter)
 
 void DHT_reader_task(void *pvParameter)
 {
-	dht22_handle_t* dht_sensor = dht22_init(GPIO_NUM_22);
-	if (!dht_sensor) {
+	dht22_handle_t* dht_sensor = dht22_init(GPIO_NUM_26);
+            if (!dht_sensor) {
 		ESP_LOGE(TAG, "Failed to initialize DHT22 sensor. Deleting task.");
 		vTaskDelete(NULL);
 	}

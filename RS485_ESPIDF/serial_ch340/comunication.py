@@ -85,8 +85,14 @@ try:
         elif command == "req.env":
             print("Meminta data dari slave env...")
             ser.write(b'{REQ_ENV}')
+        elif command.startswith("send.gas.period."):
+            try:
+                interval = int(command.split(".")[3])
+                ser.write(f"send.gas.period.{interval}".encode())
+            except (ValueError, IndexError):
+                print("Format interval salah. Gunakan: send.gas.period.<interval_ms>")
         else:
-            print("Perintah tidak dikenal. Gunakan 'ping gas','ping env', 'req gas', 'req env', atau 'exit'.")
+            print("Perintah tidak dikenal. Gunakan 'ping gas','ping env', 'req gas', 'req env', 'send.gas.period.<interval_ms>', atau 'exit'.")
             continue # Langsung ke iterasi berikutnya jika perintah tidak valid
         
         # Tunggu respons dari slave selama maksimal 2 detik

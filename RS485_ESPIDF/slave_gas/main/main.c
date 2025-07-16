@@ -10,6 +10,10 @@
 
 #define MQ136_ADC_CHANNEL ADC_CHANNEL_6  //GPIO2  (ADC2) 
 #define TGS2602_ADC_CHANNEL   ADC_CHANNEL_2  //GPIO14 (ADC2)
+#define MISC6814_CO2_CHANNEL ADC_CHANNEL_0 // GPIO36 (ADC1)
+#define MISC6814_NH3_CHANNEL ADC_CHANNEL_3 // GPIO39 (ADC1)
+#define MISC6814_NO2_CHANNEL ADC_CHANNEL_6 // GPIO34 (ADC1)
+
 
 // 2. Gunakan konstanta untuk "magic numbers"
 #define READ_INTERVAL_MS 1000
@@ -25,6 +29,11 @@ bool gpio_state= 1;
 static int latest_tgs_value = 0;
 static int latest_mq_value = 0;
 static SemaphoreHandle_t sensor_data_mutex;
+static int latest_co2_value = 0;
+static int latest_nh3_value = 0;
+static int latest_no2_value = 0;
+static bool send_gas_periodically = false;
+static uint32_t gas_send_interval = 1000; // Default interval 1 second
 
 QueueHandle_t uart_event_queue;
 static adc_oneshot_unit_handle_t adc2_handle; // <-- [FIX 1] Pindahkan handle ke scope global/static
@@ -78,6 +87,7 @@ void RS485_SetRX()
 
 void ADC_Init(void)
 {
+    adc_oneshot_unit_handle_t adc1_handle;
     //inisialisasi ADC2 (One-Shot Mode)
     adc_oneshot_unit_init_cfg_t init_config2 = {
         .unit_id = ADC_UNIT_2,
@@ -91,7 +101,24 @@ void ADC_Init(void)
         .atten = ADC_ATTEN_DB_12,      // Menggunakan ADC_ATTEN_DB_12 yang tidak deprecated
     };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, TGS2602_ADC_CHANNEL, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, MQ136_ADC_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, MQ136_ADC_CHANNEL, &config));    
+
+    // Inisialisasi ADC1 untuk MISC6814
+    adc_oneshot_unit_init_cfg_t init_config1 = {
+        .unit_id = ADC_UNIT_1,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+
+    // Konfigurasi channel untuk ADC1
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_CO2_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_NH3_CHANNEL, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_NO2_CHANNEL, &config));
+
+    // Store ADC1 handle
+    adc1_handle = adc1_handle;
+
+
 }
 
 void uart_event_task(void *pvParameter)
@@ -114,7 +141,7 @@ void uart_event_task(void *pvParameter)
                     {
                         // [FIX UTAMA] Beri jeda sebelum merespons.
                         // Ini memberi waktu bagi master untuk beralih dari mode TX ke RX.
-                        vTaskDelay(pdMS_TO_TICKS(10));
+                        vTaskDelay(pdMS_TO_TICKS(5));
                         // [FIX 1] Kirim respons dengan format yang benar (diakhiri '}')
                         ESP_LOGI(TAG_RS485,"PING_RECEIVED");
                         RS485_Send(UART_NUM_2,(uint8_t*)"{GAS_CONNECT}",13);
@@ -122,11 +149,11 @@ void uart_event_task(void *pvParameter)
                     // [IMPROVEMENT] Gunakan 'else if' karena sebuah perintah tidak mungkin PING dan REQ sekaligus.
                     else if(strncmp((char*)rx_buffer,"{REQ_GAS}",9) == 0){
                         // [FIX UTAMA] Beri jeda sebelum merespons.
-                        vTaskDelay(pdMS_TO_TICKS(10));
+                        vTaskDelay(pdMS_TO_TICKS(5));
                         int tgs_val, mq_val;
                         // [FIX 2 & 4] Ambil data sensor dengan aman dan kirimkan
                         if (xSemaphoreTake(sensor_data_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-                            tgs_val = latest_tgs_value;
+                           tgs_val = latest_tgs_value;
                             mq_val = latest_mq_value;
                             xSemaphoreGive(sensor_data_mutex);
                         } else {
@@ -136,10 +163,28 @@ void uart_event_task(void *pvParameter)
                         }
                         
                         char response_buffer[100];
-                        snprintf(response_buffer, sizeof(response_buffer), "{\"tgs2602\":%d,\"mq136\":%d}", tgs_val, mq_val);
+                        snprintf(response_buffer, sizeof(response_buffer), "{\"tgs2602\":%d,\"mq136\":%d,\"co2\":%d,\"nh3\":%d,\"no2\":%d}", tgs_val, mq_val, latest_co2_value, latest_nh3_value, latest_no2_value);
                         RS485_Send(UART_NUM_2, (uint8_t*)response_buffer, strlen(response_buffer));
                         ESP_LOGI(TAG_RS485, "Sent sensor data: %s", response_buffer);
                     }
+                    else if (sscanf((char*)rx_buffer, "send.gas.period.%lu", &gas_send_interval) == 1) {
+                        send_gas_periodically = true;
+                        ESP_LOGI(TAG_RS485, "Periodic gas data sending started with interval: %lu ms", gas_send_interval);
+                        char response[50];
+                        snprintf(response, sizeof(response), "{GAS_PERIOD_ON}");
+                        RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
+                    }
+                     else if (strncmp((char*)rx_buffer, "stop.gas.period", strlen("stop.gas.period")) == 0) {
+                        send_gas_periodically = false;
+                        ESP_LOGI(TAG_RS485, "Periodic gas data sending stopped");
+                         char response[50];
+                        snprintf(response, sizeof(response), "{GAS_PERIOD_OFF}");
+                        RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
+
+                    }
+
+
+
 
                     //ESP_LOGI(TAG_RS485,"Received : %.*s",event.size,rx_buffer);//log untuk melihat pesan yang diterima
                     memset(rx_buffer,0,sizeof(rx_buffer));
@@ -156,19 +201,32 @@ void uart_event_task(void *pvParameter)
 
 void sensor_read_task(void *pvParameter)
 {
-    // <-- [FIX 2] Task harus berjalan dalam loop tak terbatas
     while(1) {
+        int co2 = 0;
+        int nh3 = 0;
+        int no2 = 0;
+
         int tgs2602 = 0;
         int mq136 = 0;
 
         // Langkah 1: Baca kedua sensor terlebih dahulu untuk mendapatkan nilai terbaru
         esp_err_t tgs_status = adc_oneshot_read(adc2_handle, TGS2602_ADC_CHANNEL, &tgs2602);
         esp_err_t mq_status = adc_oneshot_read(adc2_handle, MQ136_ADC_CHANNEL, &mq136);
+        esp_err_t co2_status = adc_oneshot_read(adc2_handle, MISC6814_CO2_CHANNEL, &co2);
+        esp_err_t nh3_status = adc_oneshot_read(adc2_handle, MISC6814_NH3_CHANNEL, &nh3);
+        esp_err_t no2_status = adc_oneshot_read(adc2_handle, MISC6814_NO2_CHANNEL, &no2);
+
 
         // Langkah 2 (FIX): Kunci mutex SATU KALI untuk memperbarui kedua nilai secara atomik.
         // Ini mencegah race condition di mana task lain membaca data yang setengah diperbarui.
         if (xSemaphoreTake(sensor_data_mutex, portMAX_DELAY) == pdTRUE) {
             if (tgs_status == ESP_OK) latest_tgs_value = tgs2602;
+            if (co2_status == ESP_OK) latest_co2_value = co2;
+            if (nh3_status == ESP_OK) latest_nh3_value = nh3;
+            if (no2_status == ESP_OK) latest_no2_value = no2;
+
+
+
             if (mq_status == ESP_OK) latest_mq_value = mq136;
             xSemaphoreGive(sensor_data_mutex);
         }
@@ -187,9 +245,29 @@ void sensor_read_task(void *pvParameter)
         } else {
             ESP_LOGE(TAG_SENSOR, "Failed to read MQ136. Error: %s", esp_err_to_name(mq_status));
         }
-        char responsebuffer[100];
-        snprintf(responsebuffer, sizeof(responsebuffer), "{\"tgs2602\":%d,\"mq136\":%d}", tgs2602, mq136);
-        RS485_Send(UART_NUM_2, (uint8_t*)responsebuffer, strlen(responsebuffer));
+         if (co2_status == ESP_OK) {
+            ESP_LOGI(TAG_SENSOR, "CO2 Raw Value: %d", co2);
+        } else {
+            ESP_LOGE(TAG_SENSOR, "Failed to read CO2. Error: %s", esp_err_to_name(co2_status));
+        }
+
+        if (nh3_status == ESP_OK) {
+            ESP_LOGI(TAG_SENSOR, "NH3 Raw Value: %d", nh3);
+        } else {
+            ESP_LOGE(TAG_SENSOR, "Failed to read NH3. Error: %s", esp_err_to_name(nh3_status));
+        }
+
+        if (no2_status == ESP_OK) {
+            ESP_LOGI(TAG_SENSOR, "NO2 Raw Value: %d", no2);
+        } else {
+            ESP_LOGE(TAG_SENSOR, "Failed to read NO2. Error: %s", esp_err_to_name(no2_status));
+        }
+
+         if (send_gas_periodically) {
+            char response_buffer[200];
+            snprintf(response_buffer, sizeof(response_buffer), "{\"tgs2602\":%d,\"mq136\":%d,\"co2\":%d,\"nh3\":%d,\"no2\":%d}", tgs2602, mq136, co2, nh3, no2);
+            RS485_Send(UART_NUM_2, (uint8_t*)response_buffer, strlen(response_buffer));
+        }
         vTaskDelay(pdMS_TO_TICKS(READ_INTERVAL_MS));
     }
 }   
