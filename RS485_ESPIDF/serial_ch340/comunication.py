@@ -2,22 +2,30 @@ import serial
 import sys
 import threading
 import time
+import serial.serialutil
 
- 
-try:
-    # Open serial port
-    ser = serial.Serial(
-        port="/dev/ttyUSB0",
-        baudrate=115200,
-        bytesize=serial.EIGHTBITS,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        timeout=1.0
-    )
-except serial.SerialException as e:
-    print(f"Error: Tidak dapat membuka PORT. {e}")
-    sys.exit()
- 
+PORT = "/dev/ttyUSB1" # Ubah jika perlu
+BAUDRATE = 115200
+
+def connect_serial(port, baudrate):
+    """Mencoba terhubung ke port serial secara terus-menerus hingga berhasil."""
+    while True:
+        try:
+            ser = serial.Serial(
+                port=port,
+                baudrate=baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=1.0  # Timeout untuk operasi read
+            )
+            print(f"\nBerhasil terhubung ke {port}.")
+            return ser
+        except serial.SerialException as e:
+            print(f"\rGagal terhubung ke {port}: {e}. Mencoba lagi dalam 5 detik...", end="")
+            time.sleep(5)
+
+
 # Event untuk sinkronisasi antara thread utama (pengirim) dan thread pembaca
 response_received = threading.Event()
 
@@ -44,65 +52,89 @@ def read_from_port(ser, event_handler):
                         # Beri tahu thread utama bahwa respons telah diterima
                         event_handler.set()
         except serial.SerialException:
-            print("\nKoneksi serial terputus.")
+            # Biarkan loop utama yang menangani proses reconnect
             break
- 
-# Mulai thread untuk membaca data
-# [FIX] Ganti 'spiner' dengan variabel serial port yang benar, yaitu 'ser'
-read_thread = threading.Thread(target=read_from_port, args=(ser, response_received))
-read_thread.daemon = True # Thread akan berhenti saat program utama berhenti
-read_thread.start()
+        except Exception as e:
+            print(f"\nError tak terduga di thread pembaca: {e}")
+            break
 
-print(f"Terhubung ke {ser.name}. Ketik 'ping', 'req', atau 'exit' untuk keluar.")
+def main():
+    """Fungsi utama program dengan logika auto-reconnect."""
+    ser = None
+    read_thread = None
 
-try:
     while True:
-        # Thread utama menunggu input dari pengguna
-        command = input("> ").strip().lower()
+        try:
+            if ser is None or not ser.is_open:
+                ser = connect_serial(PORT, BAUDRATE)
+                response_received.clear()
+                
+                read_thread = threading.Thread(target=read_from_port, args=(ser, response_received))
+                read_thread.daemon = True
+                read_thread.start()
+                print("Ketik 'ping.all', 'req.all', 'send.gas.period.<ms>', 'stop.gas.period', atau 'exit' untuk keluar.")
 
-        # Kosongkan event sebelum mengirim perintah baru
-        response_received.clear()
+            # Thread utama menunggu input dari pengguna
+            command = input("> ").strip().lower()
 
-        if command == "exit":
+            # Kosongkan event sebelum mengirim perintah baru
+            response_received.clear()
+
+            if command == "exit":
+                break
+            elif command == "ping.all":
+                ser.write(b'{PING_GAS}')
+                time.sleep(0.05)  # Jeda 50ms antar perintah
+                ser.write(b'{PING_ENV}')
+            elif command == "req.all":
+                ser.write(b'{REQ_GAS}')
+                time.sleep(0.05) # Jeda 50ms antar perintah
+                ser.write(b'{REQ_ENV}')
+            elif command == "ping.gas":
+                ser.write(b'{PING_GAS}')
+            elif command == "ping.env":
+                ser.write(b'{PING_ENV}')
+            elif command == "req.gas":
+                ser.write(b'{REQ_GAS}')
+            elif command == "req.env":
+                ser.write(b'{REQ_ENV}')
+            elif command.startswith("send.gas.period."):
+                try:
+                    interval = int(command.split(".")[3])
+                    ser.write(f"send.gas.period.{interval}".encode())
+                except (ValueError, IndexError):
+                    print("Format interval salah. Gunakan: send.gas.period.<interval_ms>")
+                    continue
+            elif command == "stop.gas.period":
+                 ser.write(b'stop.gas.period')
+            else:
+                print("Perintah tidak dikenal. Coba lagi.")
+                continue
+            
+            # Tunggu respons dari slave selama maksimal 2 detik
+            # Event akan di-set oleh thread pembaca jika ada data masuk
+            received = response_received.wait(timeout=2.0)
+            if not received:
+                # Cek apakah thread pembaca masih hidup. Jika tidak, koneksi mungkin terputus.
+                if not read_thread.is_alive():
+                    raise serial.SerialException("Thread pembaca tidak aktif, koneksi mungkin terputus.")
+                print("Timeout: Tidak ada respons dari slave.")
+
+        except (serial.SerialException, serial.serialutil.PortNotOpenError) as e:
+            print(f"\nKoneksi serial terputus: {e}. Mencoba menghubungkan kembali...")
+            if ser and ser.is_open:
+                ser.close()
+            ser = None
+            if read_thread and read_thread.is_alive():
+                read_thread.join() # Tunggu thread pembaca selesai sebelum loop berikutnya
+            time.sleep(2) # Beri jeda sebelum mencoba koneksi lagi
+        except KeyboardInterrupt:
+            print("\nProgram dihentikan oleh pengguna.")
             break
-        elif command == "ping.all":
-            ser.write(b'{PING_GAS}')
-            time.sleep(0.05)  # Increase delay to 50ms between commands
-            ser.write(b'{PING_ENV}')
-            time.sleep(0.1)  # Add extra delay to allow responses to arrive
-        elif command == "req.all":
-            ser.write(b'{REQ_GAS}')
-            time.sleep(0.01)#memberi jeda untuk menerima balasan kemudian lanjut ping yang lainnya
-            ser.write(b'{REQ_ENV}')
-        elif command == "ping.gas":
-            print("Mengirim PING ke slave gas...")
-            ser.write(b'{PING_GAS}')
-        elif command == "ping.env":
-            print("Mengirim PING ke slave env...")
-            ser.write(b'{PING_ENV}')
-        elif command == "req.gas":
-            print("Meminta data dari slave gas...")
-            ser.write(b'{REQ_GAS}')
-        elif command == "req.env":
-            print("Meminta data dari slave env...")
-            ser.write(b'{REQ_ENV}')
-        elif command.startswith("send.gas.period."):
-            try:
-                interval = int(command.split(".")[3])
-                ser.write(f"send.gas.period.{interval}".encode())
-            except (ValueError, IndexError):
-                print("Format interval salah. Gunakan: send.gas.period.<interval_ms>")
-        else:
-            print("Perintah tidak dikenal. Gunakan 'ping gas','ping env', 'req gas', 'req env', 'send.gas.period.<interval_ms>', atau 'exit'.")
-            continue # Langsung ke iterasi berikutnya jika perintah tidak valid
-        
-        # Tunggu respons dari slave selama maksimal 2 detik
-        # Event akan di-set oleh thread pembaca jika ada data masuk
-        received = response_received.wait(timeout=2.0)
-        if not received:
-            print("Timeout: Tidak ada respons dari slave.")
+    
+    if ser and ser.is_open:
+        ser.close()
+    print("Koneksi ditutup. Selamat tinggal!")
 
-except KeyboardInterrupt:
-    print("\nProgram dihentikan.")
-finally:
-    ser.close()
+if __name__ == "__main__":
+    main()
