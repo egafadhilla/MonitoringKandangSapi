@@ -32,11 +32,14 @@ static SemaphoreHandle_t sensor_data_mutex;
 static int latest_co2_value = 0;
 static int latest_nh3_value = 0;
 static int latest_no2_value = 0;
-static bool send_gas_periodically = false;
-static uint32_t gas_send_interval = 1000; // Default interval 1 second
+// Variabel untuk logika waktu logging, menggantikan read_count
+static TickType_t last_log_time = 0;
+
+static int gas_read_interval = 100; // Interval pembacaan gas dalam ms
 
 QueueHandle_t uart_event_queue;
-static adc_oneshot_unit_handle_t adc2_handle; // <-- [FIX 1] Pindahkan handle ke scope global/static
+static adc_oneshot_unit_handle_t adc1_handle; // Handle untuk ADC1
+static adc_oneshot_unit_handle_t adc2_handle; // Handle untuk ADC2
 
     void RS485_SetTX(void);
     void RS485_SetRX(void);
@@ -87,7 +90,6 @@ void RS485_SetRX()
 
 void ADC_Init(void)
 {
-    adc_oneshot_unit_handle_t adc1_handle;
     //inisialisasi ADC2 (One-Shot Mode)
     adc_oneshot_unit_init_cfg_t init_config2 = {
         .unit_id = ADC_UNIT_2,
@@ -114,11 +116,6 @@ void ADC_Init(void)
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_CO2_CHANNEL, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_NH3_CHANNEL, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, MISC6814_NO2_CHANNEL, &config));
-
-    // Store ADC1 handle
-    adc1_handle = adc1_handle;
-
-
 }
 
 void uart_event_task(void *pvParameter)
@@ -167,25 +164,6 @@ void uart_event_task(void *pvParameter)
                         RS485_Send(UART_NUM_2, (uint8_t*)response_buffer, strlen(response_buffer));
                         ESP_LOGI(TAG_RS485, "Sent sensor data: %s", response_buffer);
                     }
-                    // Hapus logika untuk 'send.gas.period' dan 'stop.gas.period' karena Master yang akan mengontrol polling
-                    /* 
-                    else if (sscanf((char*)rx_buffer, "send.gas.period.%lu", &gas_send_interval) == 1) {
-                        send_gas_periodically = true;
-                        ESP_LOGI(TAG_RS485, "Periodic gas data sending started with interval: %lu ms", gas_send_interval);
-                        char response[50];
-                        snprintf(response, sizeof(response), "{GAS_PERIOD_ON}");
-                        RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
-                    } else if (strncmp((char*)rx_buffer, "stop.gas.period", strlen("stop.gas.period")) == 0) {
-                        send_gas_periodically = false;
-                        ESP_LOGI(TAG_RS485, "Periodic gas data sending stopped");
-                         char response[50];
-                        snprintf(response, sizeof(response), "{GAS_PERIOD_OFF}");
-                        RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
-
-                    }
-                    */
-
-
 
                     //ESP_LOGI(TAG_RS485,"Received : %.*s",event.size,rx_buffer);//log untuk melihat pesan yang diterima
                     memset(rx_buffer,0,sizeof(rx_buffer));
@@ -213,60 +191,61 @@ void sensor_read_task(void *pvParameter)
         // Langkah 1: Baca kedua sensor terlebih dahulu untuk mendapatkan nilai terbaru
         esp_err_t tgs_status = adc_oneshot_read(adc2_handle, TGS2602_ADC_CHANNEL, &tgs2602);
         esp_err_t mq_status = adc_oneshot_read(adc2_handle, MQ136_ADC_CHANNEL, &mq136);
-        esp_err_t co2_status = adc_oneshot_read(adc2_handle, MISC6814_CO2_CHANNEL, &co2);
-        esp_err_t nh3_status = adc_oneshot_read(adc2_handle, MISC6814_NH3_CHANNEL, &nh3);
-        esp_err_t no2_status = adc_oneshot_read(adc2_handle, MISC6814_NO2_CHANNEL, &no2);
 
+        // [BUG FIX] Gunakan handle ADC yang benar (adc1_handle) untuk sensor MISC6814
+        esp_err_t co2_status = adc_oneshot_read(adc1_handle, MISC6814_CO2_CHANNEL, &co2);
+        esp_err_t nh3_status = adc_oneshot_read(adc1_handle, MISC6814_NH3_CHANNEL, &nh3);
+        esp_err_t no2_status = adc_oneshot_read(adc1_handle, MISC6814_NO2_CHANNEL, &no2);
 
-        // Langkah 2 (FIX): Kunci mutex SATU KALI untuk memperbarui kedua nilai secara atomik.
-        // Ini mencegah race condition di mana task lain membaca data yang setengah diperbarui.
+        // Langkah 2: Kunci mutex SATU KALI untuk memperbarui semua nilai secara atomik.
         if (xSemaphoreTake(sensor_data_mutex, portMAX_DELAY) == pdTRUE) {
             if (tgs_status == ESP_OK) latest_tgs_value = tgs2602;
             if (co2_status == ESP_OK) latest_co2_value = co2;
             if (nh3_status == ESP_OK) latest_nh3_value = nh3;
             if (no2_status == ESP_OK) latest_no2_value = no2;
-
-
-
             if (mq_status == ESP_OK) latest_mq_value = mq136;
             xSemaphoreGive(sensor_data_mutex);
         }
 
-        // Langkah 3: Lakukan logging setelah mutex dilepaskan.
-        if (tgs_status == ESP_OK) {
-            ESP_LOGI(TAG_SENSOR, "TGS2602 Raw Value: %d", tgs2602);
-        } else if (tgs_status == ESP_ERR_TIMEOUT) {
-            ESP_LOGW(TAG_SENSOR, "ADC2 reading for TGS2602 timed out");
-        } else {
-            ESP_LOGE(TAG_SENSOR, "Failed to read TGS2602. Error: %s", esp_err_to_name(tgs_status));
+        // Gunakan logika "millis" untuk logging setiap 1000ms
+        TickType_t current_time = xTaskGetTickCount();
+        if ((current_time - last_log_time) >= pdMS_TO_TICKS(1000)) {
+            // Langkah 3: Lakukan logging setelah mutex dilepaskan.
+            if (tgs_status == ESP_OK) {
+                ESP_LOGI(TAG_SENSOR, "TGS2602 Raw Value: %d", tgs2602);
+            } else if (tgs_status == ESP_ERR_TIMEOUT) {
+                ESP_LOGW(TAG_SENSOR, "ADC2 reading for TGS2602 timed out");
+            } else {
+                ESP_LOGE(TAG_SENSOR, "Failed to read TGS2602. Error: %s", esp_err_to_name(tgs_status));
+            }
+
+            if (mq_status == ESP_OK) {
+                ESP_LOGI(TAG_SENSOR, "MQ136 Raw Value: %d", mq136);
+            } else {
+                ESP_LOGE(TAG_SENSOR, "Failed to read MQ136. Error: %s", esp_err_to_name(mq_status));
+            }
+            if (co2_status == ESP_OK) {
+                ESP_LOGI(TAG_SENSOR, "CO2 Raw Value: %d", co2);
+            } else {
+                ESP_LOGE(TAG_SENSOR, "Failed to read CO2. Error: %s", esp_err_to_name(co2_status));
+            }
+
+            if (nh3_status == ESP_OK) {
+                ESP_LOGI(TAG_SENSOR, "NH3 Raw Value: %d", nh3);
+            } else {
+                ESP_LOGE(TAG_SENSOR, "Failed to read NH3. Error: %s", esp_err_to_name(nh3_status));
+            }
+
+            if (no2_status == ESP_OK) {
+                ESP_LOGI(TAG_SENSOR, "NO2 Raw Value: %d", no2);
+            } else {
+                ESP_LOGE(TAG_SENSOR, "Failed to read NO2. Error: %s", esp_err_to_name(no2_status));
+            }
+
+            last_log_time = current_time; // Perbarui waktu logging terakhir
         }
 
-        if (mq_status == ESP_OK) {
-            ESP_LOGI(TAG_SENSOR, "MQ136 Raw Value: %d", mq136);
-        } else {
-            ESP_LOGE(TAG_SENSOR, "Failed to read MQ136. Error: %s", esp_err_to_name(mq_status));
-        }
-         if (co2_status == ESP_OK) {
-            ESP_LOGI(TAG_SENSOR, "CO2 Raw Value: %d", co2);
-        } else {
-            ESP_LOGE(TAG_SENSOR, "Failed to read CO2. Error: %s", esp_err_to_name(co2_status));
-        }
-
-        if (nh3_status == ESP_OK) {
-            ESP_LOGI(TAG_SENSOR, "NH3 Raw Value: %d", nh3);
-        } else {
-            ESP_LOGE(TAG_SENSOR, "Failed to read NH3. Error: %s", esp_err_to_name(nh3_status));
-        }
-
-        if (no2_status == ESP_OK) {
-            ESP_LOGI(TAG_SENSOR, "NO2 Raw Value: %d", no2);
-        } else {
-            ESP_LOGE(TAG_SENSOR, "Failed to read NO2. Error: %s", esp_err_to_name(no2_status));
-        }
-
-        // Slave sekarang hanya membaca sensor setiap 1 detik dan menunggu perintah dari Master.
-        // Dia tidak lagi mengirim data atas inisiatif sendiri.
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(gas_read_interval)); // Pembacaan sensor setiap 100ms
     }
 }   
 

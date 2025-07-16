@@ -21,6 +21,8 @@ uint8_t rx_buffer[50];
 
 static float latest_dht_humidity = 0.0f;
 static float latest_dht_temperature = 0.0f;
+static TickType_t last_log_time = 0;
+
 static SemaphoreHandle_t sensor_data_mutex;
 
 void RS485_SetTX(void);
@@ -140,25 +142,29 @@ void DHT_reader_task(void *pvParameter)
 		vTaskDelete(NULL);
 	}
 
-	while(1) {
-		ESP_LOGI(TAG, "Reading DHT Sensor...");
-		int ret = readDHT(dht_sensor);
-		errorHandler(ret);
+    while(1) {
+        ESP_LOGI(TAG, "Reading DHT Sensor...");
+        int ret = readDHT(dht_sensor);
+        errorHandler(ret);
 
-		// [FIX 1] Lindungi penulisan ke variabel global dengan mutex
-		if (ret == DHT_OK) {
-			if (xSemaphoreTake(sensor_data_mutex, portMAX_DELAY) == pdTRUE) {
-				latest_dht_humidity = getHumidity(dht_sensor);
-				latest_dht_temperature = getTemperature(dht_sensor);
-				xSemaphoreGive(sensor_data_mutex);
+        // [FIX 1] Lindungi penulisan ke variabel global dengan mutex
+        if (ret == DHT_OK) {
+            if (xSemaphoreTake(sensor_data_mutex, portMAX_DELAY) == pdTRUE) {
+                latest_dht_humidity = getHumidity(dht_sensor);
+                latest_dht_temperature = getTemperature(dht_sensor);
+                xSemaphoreGive(sensor_data_mutex);
 
-				// Lakukan logging setelah mutex dilepaskan
-				ESP_LOGI(TAG, "Humidity: %.2f %%, Temperature: %.2f C", latest_dht_humidity, latest_dht_temperature);
-			}
-		}
+                // Gunakan logika "millis" untuk logging setiap 2000ms
+                TickType_t current_time = xTaskGetTickCount();
+                if ((current_time - last_log_time) >= pdMS_TO_TICKS(2000)) {
+                    ESP_LOGI(TAG, "Humidity: %.2f %%, Temperature: %.2f C", latest_dht_humidity, latest_dht_temperature);
+                    last_log_time = current_time; // Perbarui waktu logging terakhir
+                }
+            }
+        }
 
-		vTaskDelay(pdMS_TO_TICKS(2000));
-	}
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
 }
 
 void app_main()
