@@ -232,10 +232,10 @@ def poll_all(ser,interval_ms):
         print(f"\nMemulai polling 'all'. Interval per siklus: {interval_seconds:.2f} detik. Ketik 'poll.all.stop' untuk berhenti.")
 
         while not stop_polling_event.is_set():
-            try:
-                # --- Polling GAS ---
-                if stop_polling_event.is_set(): break
-                response_received.clear()
+                try:
+                    # --- Polling GAS ---
+                    if stop_polling_event.is_set(): break
+                    response_received.clear()
                 ser.write(b'{REQ_GAS}')
                 if not response_received.wait(timeout=1.0):
                     print(f"\nTimeout: Tidak ada respons dari slave GAS.", end="")
