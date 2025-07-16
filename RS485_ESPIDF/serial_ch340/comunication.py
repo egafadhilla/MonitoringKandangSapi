@@ -4,7 +4,12 @@ import threading
 import time
 import serial.serialutil
 
-PORT = "/dev/ttyUSB1" # Ubah jika perlu
+# --- Polling Control ---
+polling_thread = None
+stop_polling_event = threading.Event()
+# -----------------------
+
+PORT = "/dev/ttyUSB0" # Ubah jika perlu
 BAUDRATE = 115200
 
 def connect_serial(port, baudrate):
@@ -58,6 +63,24 @@ def read_from_port(ser, event_handler):
             print(f"\nError tak terduga di thread pembaca: {e}")
             break
 
+def poll_task(ser, interval_ms):
+    """Thread untuk melakukan polling (req.gas) secara periodik."""
+    global stop_polling_event
+    interval_seconds = interval_ms / 1000.0
+    print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.stop' untuk berhenti.")
+    
+    while not stop_polling_event.is_set():
+        try:
+            # Pastikan tidak ada yang sedang menunggu respons sebelum kita mengirim
+            response_received.clear()
+            ser.write(b'{REQ_GAS}')
+            # Tidak perlu wait di sini, biarkan thread utama yang menanganinya jika perlu
+        except (serial.SerialException, serial.serialutil.PortNotOpenError):
+            print("\nKoneksi terputus saat polling. Polling dihentikan.")
+            break
+        time.sleep(interval_seconds)
+    print("\nPolling dihentikan.")
+
 def main():
     """Fungsi utama program dengan logika auto-reconnect."""
     ser = None
@@ -72,7 +95,7 @@ def main():
                 read_thread = threading.Thread(target=read_from_port, args=(ser, response_received))
                 read_thread.daemon = True
                 read_thread.start()
-                print("Ketik 'ping.all', 'req.all', 'send.gas.period.<ms>', 'stop.gas.period', atau 'exit' untuk keluar.")
+                print("Perintah: ping.all, req.all, poll.gas.start <ms>, poll.stop, exit")
 
             # Thread utama menunggu input dari pengguna
             command = input("> ").strip().lower()
@@ -82,6 +105,7 @@ def main():
 
             if command == "exit":
                 break
+
             elif command == "ping.all":
                 ser.write(b'{PING_GAS}')
                 time.sleep(0.05)  # Jeda 50ms antar perintah
@@ -98,15 +122,23 @@ def main():
                 ser.write(b'{REQ_GAS}')
             elif command == "req.env":
                 ser.write(b'{REQ_ENV}')
-            elif command.startswith("send.gas.period."):
+            elif command.startswith("poll.gas.start"):
                 try:
-                    interval = int(command.split(".")[3])
-                    ser.write(f"send.gas.period.{interval}".encode())
+                    parts = command.split()
+                    interval = int(parts[2])
+                    # Hentikan polling lama jika ada yang berjalan
+                    if polling_thread and polling_thread.is_alive():
+                        stop_polling_event.set()
+                        polling_thread.join()
+                    
+                    stop_polling_event.clear()
+                    polling_thread = threading.Thread(target=poll_task, args=(ser, interval))
+                    polling_thread.daemon = True
+                    polling_thread.start()
                 except (ValueError, IndexError):
-                    print("Format interval salah. Gunakan: send.gas.period.<interval_ms>")
-                    continue
-            elif command == "stop.gas.period":
-                 ser.write(b'stop.gas.period')
+                    print("Format salah. Gunakan: poll.gas.start <interval_ms>")
+            elif command == "poll.stop":
+                 stop_polling_event.set()
             else:
                 print("Perintah tidak dikenal. Coba lagi.")
                 continue
@@ -130,10 +162,16 @@ def main():
             time.sleep(2) # Beri jeda sebelum mencoba koneksi lagi
         except KeyboardInterrupt:
             print("\nProgram dihentikan oleh pengguna.")
+            if polling_thread and polling_thread.is_alive():
+                stop_polling_event.set() # Pastikan polling thread berhenti
             break
     
     if ser and ser.is_open:
         ser.close()
+    
+    if polling_thread and polling_thread.is_alive():
+        polling_thread.join()
+
     print("Koneksi ditutup. Selamat tinggal!")
 
 if __name__ == "__main__":

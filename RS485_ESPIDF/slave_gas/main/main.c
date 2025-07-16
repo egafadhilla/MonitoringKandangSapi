@@ -167,14 +167,15 @@ void uart_event_task(void *pvParameter)
                         RS485_Send(UART_NUM_2, (uint8_t*)response_buffer, strlen(response_buffer));
                         ESP_LOGI(TAG_RS485, "Sent sensor data: %s", response_buffer);
                     }
+                    // Hapus logika untuk 'send.gas.period' dan 'stop.gas.period' karena Master yang akan mengontrol polling
+                    /* 
                     else if (sscanf((char*)rx_buffer, "send.gas.period.%lu", &gas_send_interval) == 1) {
                         send_gas_periodically = true;
                         ESP_LOGI(TAG_RS485, "Periodic gas data sending started with interval: %lu ms", gas_send_interval);
                         char response[50];
                         snprintf(response, sizeof(response), "{GAS_PERIOD_ON}");
                         RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
-                    }
-                     else if (strncmp((char*)rx_buffer, "stop.gas.period", strlen("stop.gas.period")) == 0) {
+                    } else if (strncmp((char*)rx_buffer, "stop.gas.period", strlen("stop.gas.period")) == 0) {
                         send_gas_periodically = false;
                         ESP_LOGI(TAG_RS485, "Periodic gas data sending stopped");
                          char response[50];
@@ -182,7 +183,7 @@ void uart_event_task(void *pvParameter)
                         RS485_Send(UART_NUM_2, (uint8_t*)response, strlen(response));
 
                     }
-
+                    */
 
 
 
@@ -263,12 +264,9 @@ void sensor_read_task(void *pvParameter)
             ESP_LOGE(TAG_SENSOR, "Failed to read NO2. Error: %s", esp_err_to_name(no2_status));
         }
 
-         if (send_gas_periodically) {
-            char response_buffer[200];
-            snprintf(response_buffer, sizeof(response_buffer), "{\"tgs2602\":%d,\"mq136\":%d,\"co2\":%d,\"nh3\":%d,\"no2\":%d}", tgs2602, mq136, co2, nh3, no2);
-            RS485_Send(UART_NUM_2, (uint8_t*)response_buffer, strlen(response_buffer));
-        }
-        vTaskDelay(pdMS_TO_TICKS(READ_INTERVAL_MS));
+        // Slave sekarang hanya membaca sensor setiap 1 detik dan menunggu perintah dari Master.
+        // Dia tidak lagi mengirim data atas inisiatif sendiri.
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }   
 
