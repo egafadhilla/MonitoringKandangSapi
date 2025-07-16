@@ -63,17 +63,20 @@ def read_from_port(ser, event_handler):
             print(f"\nError tak terduga di thread pembaca: {e}")
             break
 
-def poll_task(ser, interval_ms):
-    """Thread untuk melakukan polling (req.gas) secara periodik."""
+def poll_task(ser, interval_ms, command="req.gas"):
+    """Thread untuk melakukan polling secara periodik."""
     global stop_polling_event
     interval_seconds = interval_ms / 1000.0
-    print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.stop' untuk berhenti.")
-    
+    if command == "req.gas":
+        print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.stop' untuk berhenti.")
+    elif command == "req.dht":
+        print(f"\nMemulai polling ke 'dht' setiap {interval_seconds:.2f} detik. Ketik 'poll.dht.stop' untuk berhenti.")
+
     while not stop_polling_event.is_set():
         try:
             # Pastikan tidak ada yang sedang menunggu respons sebelum kita mengirim
             response_received.clear()
-            ser.write(b'{REQ_GAS}')
+            ser.write(b'{REQ_GAS}' if command == "req.gas" else b'{REQ_ENV}')  # Kirim perintah sesuai argumen
             # Tidak perlu wait di sini, biarkan thread utama yang menanganinya jika perlu
         except (serial.SerialException, serial.serialutil.PortNotOpenError):
             print("\nKoneksi terputus saat polling. Polling dihentikan.")
