@@ -279,9 +279,10 @@ void app_main(void)
     // Buat mutex sebelum task-task yang menggunakannya dimulai
     sensor_data_mutex = xSemaphoreCreateMutex();
 
-    xTaskCreate(uart_event_task, "uart_event_task", 2048 * 4, NULL, 5, NULL);
+    // Naikkan prioritas UART task agar lebih responsif terhadap command dari master
+    xTaskCreate(uart_event_task, "uart_event_task", 2048 * 8, NULL, 10, NULL);
     ESP_LOGI(TAG_RS485, "Setup complete. Main task is now idle.");
-    xTaskCreate(sensor_read_task, "sensor_read_task", 2048 * 2, NULL, 5, NULL);
+    xTaskCreate(sensor_read_task, "sensor_read_task", 2048 * 2, NULL, 5, NULL); // Biarkan sensor task di prioritas normal
     
     // while(1){
         

@@ -67,8 +67,9 @@ try:
             break
         elif command == "ping.all":
             ser.write(b'{PING_GAS}')
-            time.sleep(0.01)#memberi jeda untuk menerima balasan kemudian lanjut ping yang lainnya
+            time.sleep(0.05)  # Increase delay to 50ms between commands
             ser.write(b'{PING_ENV}')
+            time.sleep(0.1)  # Add extra delay to allow responses to arrive
         elif command == "req.all":
             ser.write(b'{REQ_GAS}')
             time.sleep(0.01)#memberi jeda untuk menerima balasan kemudian lanjut ping yang lainnya
