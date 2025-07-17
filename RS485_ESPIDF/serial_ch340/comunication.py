@@ -68,9 +68,9 @@ def poll_task(ser, interval_ms, command="req.gas"):
     global stop_polling_event
     interval_seconds = interval_ms / 1000.0
     if command == "req.gas":
-        print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.gas.stop' untuk berhenti.")
-    elif command == "req.env":
-        print(f"\nMemulai polling ke 'env' setiap {interval_seconds:.2f} detik. Ketik 'poll.env.stop' untuk berhenti.")
+        print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.stop' untuk berhenti.")
+    elif command == "req.dht":
+        print(f"\nMemulai polling ke 'dht' setiap {interval_seconds:.2f} detik. Ketik 'poll.dht.stop' untuk berhenti.")
 
     while not stop_polling_event.is_set():
         try:
@@ -172,9 +172,6 @@ def main():
                 parts = command.split('.')
                 if len(parts) == 4 and parts[3].isdigit():
                     poll_all(ser,int(parts[3]))
-            elif command == "poll.all.stop":
-                print("\nMenghentikan polling 'all'...")
-                stop_polling_event.set()
             else:
                 print("Perintah tidak dikenal. Coba lagi.")
                 continue
@@ -213,51 +210,57 @@ def main():
     print("Koneksi ditutup. Selamat tinggal!")
 
 
+def poll_task(ser, interval_ms, command="req.gas"):
+    """Thread untuk melakukan polling secara periodik."""
+    global stop_polling_event
+    interval_seconds = interval_ms / 1000.0
+    if command == "req.gas":
+        print(f"\nMemulai polling ke 'gas' setiap {interval_seconds:.2f} detik. Ketik 'poll.gas.stop' untuk berhenti.")
+    elif command == "req.env":
+        print(f"\nMemulai polling ke 'env' setiap {interval_seconds:.2f} detik. Ketik 'poll.env.stop' untuk berhenti.")
+    while not stop_polling_event.is_set():
+        try:
+            # Pastikan tidak ada yang sedang menunggu respons sebelum kita mengirim
+            response_received.clear()
+            ser.write(b'{REQ_GAS}' if command == "req.gas" else b'{REQ_ENV}')  # Kirim perintah sesuai argumen
+            # Tidak perlu wait di sini, biarkan thread utama yang menanganinya jika perlu
+        except (serial.SerialException, serial.serialutil.PortNotOpenError):
+            print("\nKoneksi terputus saat polling. Polling dihentikan.")
+            break
+        time.sleep(interval_seconds)
+    print("\nPolling dihentikan.")
+
 def poll_all(ser,interval_ms):
-    """Memulai thread background untuk melakukan polling ke semua slave secara bergantian."""
+    """Melakukan polling ke semua slave secara bergantian."""
     global polling_thread, stop_polling_event
+    interval_seconds = interval_ms / 1000.0
+    print(f"\nMemulai polling ke semua slave setiap {interval_seconds:.2f} detik. Ketik 'poll.all.stop' untuk berhenti.")
 
-    # Hentikan polling yang mungkin sedang berjalan
-    if polling_thread and polling_thread.is_alive():
-        stop_polling_event.set()
-        polling_thread.join()
-    
-    stop_polling_event.clear()
+    while not stop_polling_event.is_set():
+        try:
+            # Polling GAS
+            response_received.clear()
+            ser.write(b'{REQ_GAS}')
+            gas_received = response_received.wait(timeout=1.0)  # Tunggu respons GAS
+            if not gas_received:
+                print("\nTimeout: Tidak ada respons dari slave GAS.")
 
-    def poll_all_target():
-        """Fungsi yang akan dijalankan oleh thread polling 'all'."""
-        interval_seconds = interval_ms / 1000.0
-        # Interval total adalah interval_ms, jadi jeda antar request adalah setengahnya
-        sleep_duration = interval_seconds / 2.0 
-        print(f"\nMemulai polling 'all'. Interval per siklus: {interval_seconds:.2f} detik. Ketik 'poll.all.stop' untuk berhenti.")
+            if stop_polling_event.is_set(): break  # Cek flag stop setelah setiap operasi
 
-        while not stop_polling_event.is_set():
-                try:
-                    # --- Polling GAS ---
-                    if stop_polling_event.is_set(): break
-                    response_received.clear()
-                    ser.write(b'{REQ_GAS}')
-                    if not response_received.wait(timeout=1.0):
-                        print(f"\nTimeout: Tidak ada respons dari slave GAS.", end="")
+            time.sleep(interval_seconds/2)  # Jeda sebelum polling berikutnya
 
-                    # Beri jeda setelah request pertama
-                    time.sleep(sleep_duration)
-
-                    # --- Polling ENV (DHT) ---
-                    if stop_polling_event.is_set(): break
-                    response_received.clear()
-                    ser.write(b'{REQ_ENV}')
-                    if not response_received.wait(timeout=1.0):
-                        print(f"\nTimeout: Tidak ada respons dari slave ENV (DHT).", end="")
-
-                    # Beri jeda sebelum siklus berikutnya
-                    time.sleep(sleep_duration)
-
-                except (serial.SerialException, serial.serialutil.PortNotOpenError) as e:  # Added 'as e'
-                        print(f"\nKoneksi terputus saat polling: {e}. Polling dihentikan.", end="")  # Added e
-                        break
-        print("\nPolling 'all' dihentikan.\n> ", end="")
-
-    polling_thread = threading.Thread(target=poll_all_target)
-    polling_thread.daemon = True
-    polling_thread.start()
+            # Polling ENV (DHT)
+            response_received.clear()
+            ser.write(b'{REQ_ENV}')
+            env_received = response_received.wait(timeout=1.0)  # Tunggu respons ENV
+            if not env_received:
+                print("\nTimeout: Tidak ada respons dari slave ENV (DHT).")
+            time.sleep(interval_seconds/2)  # Jeda sebelum polling berikutnya
+            
+            if stop_polling_event.is_set(): break
+        except (serial.SerialException, serial.serialutil.PortNotOpenError):
+            print("\nKoneksi terputus saat polling. Polling dihentikan.")
+            break
+    print("\nPolling dihentikan.")
+if __name__ == "__main__":
+    main()
