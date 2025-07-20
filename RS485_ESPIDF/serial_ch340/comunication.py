@@ -3,13 +3,12 @@ import sys
 import threading
 import time
 import serial.serialutil
-
 # --- Polling Control ---
 polling_thread = None
 stop_polling_event = threading.Event()
 # -----------------------
 
-PORT = "/dev/ttyUSB1" # Ubah jika perlu
+PORT = "COM9" # Ubah jika perlu
 BAUDRATE = 115200
 
 def connect_serial(port, baudrate):
