@@ -198,6 +198,11 @@ void sensor_read_task(void *pvParameter)
         esp_err_t nh3_status = adc_oneshot_read(adc1_handle, MISC6814_NH3_CHANNEL, &nh3);
         esp_err_t no2_status = adc_oneshot_read(adc1_handle, MISC6814_NO2_CHANNEL, &no2);
 
+        // Balik nilai ADC untuk sensor MICS6814 agar value meningkat saat konsentrasi gas meningkat
+        if (co2_status == ESP_OK) co2 = 4095 - co2;
+        if (nh3_status == ESP_OK) nh3 = 4095 - nh3;
+        if (no2_status == ESP_OK) no2 = 4095 - no2;
+
         // Langkah 2: Kunci mutex SATU KALI untuk memperbarui semua nilai secara atomik.
         if (xSemaphoreTake(sensor_data_mutex, portMAX_DELAY) == pdTRUE) {
             if (tgs_status == ESP_OK) latest_tgs_value = tgs2602;
