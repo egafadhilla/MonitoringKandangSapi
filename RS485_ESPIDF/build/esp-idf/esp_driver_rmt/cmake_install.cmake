@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/acer/esp/v5.5-rc1/esp-idf/components/esp_driver_rmt
+# Install script for directory: C:/Users/acer/esp/v5.4/esp-idf/components/esp_driver_rmt
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

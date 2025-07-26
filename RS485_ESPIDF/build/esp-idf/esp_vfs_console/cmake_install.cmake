@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/acer/esp/v5.5-rc1/esp-idf/components/esp_vfs_console
+# Install script for directory: C:/Users/acer/esp/v5.4/esp-idf/components/esp_vfs_console
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
